@@ -1,152 +1,361 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <title>Mega Blood Donation Camp 2025</title>
-
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-        header { background: #b30000; color: white; padding: 15px; text-align: center; font-size: 20px; font-weight: bold; }
-        #container { padding: 10px; }
-        label { font-weight: bold; }
-        input, select { width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; }
-        #suggestions { border: 1px solid #ccc; max-height: 150px; overflow-y: auto; }
-        .item { padding: 8px; cursor: pointer; }
-        .item:hover { background: #eee; }
-        #map { height: 400px; margin-top: 10px; }
-        button { width: 100%; padding: 12px; background: #b30000; color: white; border: none; font-size: 16px; cursor: pointer; }
-        button:hover { background: #800000; }
-    </style>
+  <meta charset="utf-8" />
+  <title>Maharashtra — Blood Donation Camps (Mobile Responsive)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root{
+      --accent: #c62828;
+      --btn: #1565c0;
+      --sheet-height-collapsed: 26vh;
+      --sheet-height-expanded: 62vh;
+      --sheet-border-radius: 14px;
+    }
+    html,body { height:100%; margin:0; font-family: system-ui, -apple-system, Arial; -webkit-font-smoothing:antialiased; }
+    header{ background:var(--accent); color:#fff; padding:10px 14px; display:flex; align-items:center; gap:10px; }
+    header h1{ font-size:16px; margin:0; font-weight:600; }
+    #app { height: calc(100% - 52px); display:flex; flex-direction:column; }
+    /* Map container */
+    #map { flex:1; height:100%; width:100%; position:relative; }
+    /* Floating search & actions */
+    .top-bar{
+      position:absolute; left:12px; right:12px; top:12px; z-index:2200;
+      display:flex; gap:8px; align-items:center;
+    }
+    .search-wrap{ background:rgba(255,255,255,0.98); border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,0.12); width:100%; display:flex; flex-direction:column; }
+    #manual{ border:0; padding:12px 12px; font-size:15px; outline:none; border-radius:10px; width:100%; box-sizing:border-box; }
+    .controls{ display:flex; gap:8px; padding:8px; }
+    .btn { background:var(--btn); color:white; padding:10px 12px; border-radius:10px; border:0; font-weight:600; box-shadow:0 4px 12px rgba(21,101,192,0.18); }
+    .small-btn{ background:#fff; color:#444; padding:8px 10px; border-radius:10px; border:1px solid #e6e6e6; }
+    /* autocomplete list */
+    .autocomplete-list { max-height:40vh; overflow:auto; border-top:1px solid #eee; }
+    .autocomplete-item{ padding:10px 12px; border-bottom:1px solid #f2f2f2; cursor:pointer; }
+    .autocomplete-item:hover{ background:#fafafa; }
+    /* bottom sheet */
+    .sheet {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      z-index: 2300;
+      background: #ffffff;
+      border-radius: var(--sheet-border-radius);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+      transform: translateY(0);
+      transition: transform 220ms ease;
+      will-change: transform;
+      touch-action: none;
+      display:flex;
+      flex-direction:column;
+      height: var(--sheet-height-collapsed);
+      overflow: hidden;
+    }
+    .sheet.collapsed { height: var(--sheet-height-collapsed); }
+    .sheet.expanded { height: var(--sheet-height-expanded); }
+    .sheet .handle { height: 28px; display:flex; align-items:center; justify-content:center; }
+    .handle-bar { width:46px; height:6px; background:#e0e0e0; border-radius:6px; }
+    .sheet-content { padding:12px 14px; overflow:auto; }
+    .center-title { font-size:17px; font-weight:700; margin-bottom:6px; }
+    .center-meta { color:#555; margin-bottom:10px; }
+    .navigate { margin-top:10px; display:inline-block; background:var(--btn); color:white; padding:10px 14px; border-radius:10px; text-decoration:none; font-weight:700; }
+    /* responsive adjustments */
+    @media(min-width:900px){
+      .sheet{ left: calc(50% + 260px); right:10px; bottom:20px; width:420px; } /* keep panel to right on desktops */
+      .top-bar{ left:18px; right:420px; }
+    }
+  </style>
 </head>
 <body>
+  <header>
+    <h1>Maharashtra — Blood Donation Camps</h1>
+  </header>
 
-<header>
-    Mega Blood Donation Camp 2025<br>
-    Organized by MVPM Alumni & MVPM across Maharashtra
-</header>
-
-<div id="container">
-    <label>Select City</label>
-    <input type="text" id="cityInput" placeholder="Type city name..." autocomplete="off">
-
-    <div id="citySuggestions"></div>
-
-    <label>Select Area</label>
-    <input type="text" id="areaInput" placeholder="Type area name..." autocomplete="off">
-
-    <div id="areaSuggestions"></div>
-
-    <button onclick="useMyLocation()">Use My Current Location</button>
-
+  <div id="app">
     <div id="map"></div>
 
-    <h3 id="result"></h3>
-</div>
+    <!-- Floating search and controls -->
+    <div class="top-bar" role="region" aria-label="Search and actions">
+      <div class="search-wrap" style="width:100%;">
+        <input id="manual" placeholder="Type area or city (e.g. Balewadi, Baner, Bandra)" autocomplete="off" />
+        <div id="autocompleteList" class="autocomplete-list" style="display:none;"></div>
+        <div class="controls">
+          <button id="locBtn" class="btn" type="button">Use my location</button>
+          <button id="resetBtn" class="small-btn" type="button">Reset</button>
+        </div>
+      </div>
+    </div>
 
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Bottom sheet (collapsible) -->
+    <div id="sheet" class="sheet collapsed" aria-hidden="true">
+      <div class="handle" id="sheetHandle"><div class="handle-bar"></div></div>
+      <div class="sheet-content" id="sheetContent">
+        <div id="sheetInner">
+          <div style="text-align:center; color:#888; margin-bottom:8px;">Nearest blood donation centre</div>
+          <div id="centerDetails">
+            <div class="center-title" id="centerName">No selection</div>
+            <div class="center-meta" id="centerAddr"></div>
+            <div id="centerDist" style="font-weight:600; color:#333;"></div>
+            <a id="centerNav" class="navigate" href="#" target="_blank" style="display:none;">Navigate</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<script>
-let areas = [];
-let centres = [];
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+  (function(){
+    // Defensive: ensure Leaflet is available
+    if(typeof L === 'undefined'){ alert('Map library failed to load. Check your internet connection.'); throw new Error('Leaflet missing'); }
 
-// Load Maharashtra Areas CSV
-fetch("maharashtra_locations.csv")
-.then(res => res.text())
-.then(data => {
-    areas = data.split("\n").map(r => r.trim()).filter(r => r);
-});
+    // Sample centers (replace later with your final 30-40 centers)
+    const centers = [
+      { name: 'Baner Blood Donation Center', address: 'Baner, Pune', lat: 18.5590, lng: 73.7860, time: '14 Dec, 09:00-16:00', contact: '+91-90000-00010' },
+      { name: 'Kothrud Blood Bank', address: 'Kothrud, Pune', lat: 18.5070, lng: 73.8070, time: '14 Dec, 09:00-16:00', contact: '+91-90000-00011' },
+      { name: 'Hadapsar Blood Center', address: 'Hadapsar, Pune', lat: 18.5089, lng: 73.9260, time: '14 Dec, 09:30-15:30', contact: '+91-90000-00012' },
+      { name: 'Viman Nagar Blood Point', address: 'Viman Nagar, Pune', lat: 18.5670, lng: 73.9140, time: '14 Dec, 10:00-16:00', contact: '+91-90000-00013' },
+      { name: 'Aundh Blood Facility', address: 'Aundh, Pune', lat: 18.5630, lng: 73.8070, time: '14 Dec, 09:00-14:00', contact: '+91-90000-00014' },
+      { name: 'Dadar Blood Center', address: 'Dadar, Mumbai', lat: 19.0170, lng: 72.8430, time: '14 Dec, 09:00-15:00', contact: '+91-90000-00020' },
+      { name: 'Andheri Blood Bank', address: 'Andheri West, Mumbai', lat: 19.1360, lng: 72.8290, time: '14 Dec, 10:00-16:00', contact: '+91-90000-00021' },
+      { name: 'Nagpur City Blood Bank', address: 'Dharampeth, Nagpur', lat: 21.1450, lng: 79.0880, time: '14 Dec, 09:00-13:00', contact: '+91-90000-00030' },
+      { name: 'Nashik Central Blood Center', address: 'Panchavati, Nashik', lat: 20.0110, lng: 73.7910, time: '14 Dec, 09:00-14:00', contact: '+91-90000-00040' },
+      { name: 'Kolhapur Blood Donation Unit', address: 'Shahupuri, Kolhapur', lat: 16.6950, lng: 74.2330, time: '14 Dec, 09:00-13:00', contact: '+91-90000-00050' }
+    ];
 
-// Load Centres CSV
-fetch("centres.csv")
-.then(res => res.text())
-.then(data => {
-    centres = data.split("\n").slice(1).map(r => {
-        let [name, city, area, lat, lng] = r.split(",");
-        return { name, city, area, lat: parseFloat(lat), lng: parseFloat(lng) };
-    });
-});
+    // Map init (center Maharashtra)
+    const map = L.map('map', { zoomControl:true }).setView([19.7515,75.7139], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-// MAP
-let map = L.map('map').setView([19.7515, 75.7139], 6); // Maharashtra center
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
-}).addTo(map);
-
-// Autocomplete function
-function setupAutocomplete(inputId, suggestionId, list) {
-    const input = document.getElementById(inputId);
-    const suggestionBox = document.getElementById(suggestionId);
-
-    input.addEventListener("input", () => {
-        const val = input.value.toLowerCase();
-        suggestionBox.innerHTML = "";
-
-        const matches = list.filter(x => x.toLowerCase().startsWith(val)).slice(0, 30);
-
-        matches.forEach(m => {
-            let div = document.createElement("div");
-            div.className = "item";
-            div.textContent = m;
-            div.onclick = () => {
-                input.value = m;
-                suggestionBox.innerHTML = "";
-                if (inputId === "areaInput") findNearestByArea(m);
-            };
-            suggestionBox.appendChild(div);
-        });
-    });
-}
-
-// Suggest cities & areas
-setupAutocomplete("cityInput", "citySuggestions", areas);
-setupAutocomplete("areaInput", "areaSuggestions", areas);
-
-// Find nearest centre
-function findNearestByArea(areaName) {
-    const filtered = centres.filter(c => c.area.toLowerCase() === areaName.toLowerCase());
-
-    if (filtered.length === 0) {
-        document.getElementById("result").textContent = "No centre found";
-        return;
+    // markers
+    const markersLayer = L.layerGroup().addTo(map);
+    function renderMarkers(){
+      markersLayer.clearLayers();
+      centers.forEach((c, idx) => {
+        const m = L.marker([c.lat, c.lng]).addTo(markersLayer);
+        m.bindPopup(`<strong>${escapeHtml(c.name)}</strong><br>${escapeHtml(c.address)}<br>${escapeHtml(c.time)}<br>Contact: ${escapeHtml(c.contact)}`);
+        m.on('click', ()=> { showNearestFromPoint(c.lat, c.lng); });
+      });
     }
-    const c = filtered[0];
+    renderMarkers();
 
-    L.marker([c.lat, c.lng]).addTo(map).bindPopup(c.name).openPopup();
-    map.setView([c.lat, c.lng], 15);
+    // Utilities
+    function escapeHtml(s){ if(!s && s!==0) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function toRad(v){ return v*Math.PI/180; }
+    function haversine(lat1, lon1, lat2, lon2){
+      const R=6371;
+      const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+      const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
 
-    document.getElementById("result").textContent = "Nearest Centre: " + c.name;
-}
+    // bottom sheet controls
+    const sheet = document.getElementById('sheet');
+    const sheetHandle = document.getElementById('sheetHandle');
+    const centerName = document.getElementById('centerName');
+    const centerAddr = document.getElementById('centerAddr');
+    const centerDist = document.getElementById('centerDist');
+    const centerNav = document.getElementById('centerNav');
 
-// Use My Location
-function useMyLocation() {
-    navigator.geolocation.getCurrentPosition(pos => {
-        let userLat = pos.coords.latitude;
-        let userLng = pos.coords.longitude;
+    let sheetExpanded = false;
+    function openSheet(expanded=true){
+      sheet.classList.remove('collapsed');
+      sheet.classList.add('expanded');
+      sheet.setAttribute('aria-hidden','false');
+      sheetExpanded = !!expanded;
+    }
+    function closeSheet(){
+      sheet.classList.remove('expanded');
+      sheet.classList.add('collapsed');
+      sheet.setAttribute('aria-hidden','true');
+      sheetExpanded = false;
+    }
+    function updateSheet(center, distKm){
+      centerName.textContent = center.name;
+      centerAddr.textContent = center.address + (center.time? (' | ' + center.time) : '');
+      centerDist.textContent = (distKm!==undefined && distKm!==null) ? ('Distance: ' + distKm.toFixed(2) + ' km') : '';
+      centerNav.style.display = 'inline-block';
+      centerNav.href = `https://www.google.com/maps/dir/?api=1&destination=${center.lat},${center.lng}`;
+    }
 
-        let nearest = null;
-        let minDist = Infinity;
-
-        centres.forEach(c => {
-            let d = Math.hypot(c.lat - userLat, c.lng - userLng);
-            if (d < minDist) {
-                minDist = d;
-                nearest = c;
-            }
-        });
-
-        if (nearest) {
-            L.marker([nearest.lat, nearest.lng]).addTo(map).bindPopup(nearest.name).openPopup();
-            map.setView([nearest.lat, nearest.lng], 15);
-            document.getElementById("result").textContent = "Nearest Centre: " + nearest.name;
+    // Draggable behavior (touch + mouse)
+    (function makeDrag(){
+      let startY=0, startH=0, dragging=false;
+      const minH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-height-collapsed')) || 180;
+      const maxH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-height-expanded')) || 520;
+      function pointerDown(e){
+        dragging = true;
+        startY = (e.touches? e.touches[0].clientY : e.clientY);
+        startH = sheet.getBoundingClientRect().height;
+        document.body.style.userSelect='none';
+      }
+      function pointerMove(e){
+        if(!dragging) return;
+        const y = (e.touches? e.touches[0].clientY : e.clientY);
+        const dy = startY - y; // upward positive
+        let newH = Math.min(Math.max(startH + dy, minH), maxH);
+        sheet.style.height = newH + 'px';
+      }
+      function pointerUp(e){
+        if(!dragging) return;
+        dragging = false;
+        document.body.style.userSelect='';
+        const h = sheet.getBoundingClientRect().height;
+        // if more than 40% of max, expand
+        if(h > (maxH - minH)*0.45 + minH){
+          sheet.classList.add('expanded');
+          sheet.classList.remove('collapsed');
+          sheet.style.height = ''; // let CSS control
+        } else {
+          sheet.classList.remove('expanded');
+          sheet.classList.add('collapsed');
+          sheet.style.height = '';
         }
-    });
-}
-</script>
+      }
+      sheetHandle.addEventListener('touchstart', pointerDown, {passive:true});
+      sheetHandle.addEventListener('touchmove', pointerMove, {passive:true});
+      sheetHandle.addEventListener('touchend', pointerUp, {passive:true});
+      sheetHandle.addEventListener('mousedown', pointerDown);
+      window.addEventListener('mousemove', pointerMove);
+      window.addEventListener('mouseup', pointerUp);
+    })();
 
+    // Click map -> set selected location and find nearest
+    function showNearestFromPoint(lat, lng){
+      let nearest=null, minD=Infinity;
+      centers.forEach(c=>{ const d = haversine(lat, lng, c.lat, c.lng); if(d < minD){ minD = d; nearest = c; } });
+      if(nearest){
+        updateSheet(nearest, minD);
+        openSheet(true);
+      }
+    }
+
+    map.on('click', function(e){
+      const lat = e.latlng.lat, lng = e.latlng.lng;
+      // show temporary marker
+      if(window._selectedMarker) map.removeLayer(window._selectedMarker);
+      window._selectedMarker = L.circleMarker([lat,lng], {radius:7, color:'#ff6600'}).addTo(map);
+      showNearestFromPoint(lat,lng);
+    });
+
+    // Use my location
+    document.getElementById('locBtn').addEventListener('click', function(){
+      if(!navigator.geolocation){ alert('Geolocation not supported in your browser'); return; }
+      navigator.geolocation.getCurrentPosition(function(pos){
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        if(window._selectedMarker) map.removeLayer(window._selectedMarker);
+        window._selectedMarker = L.circleMarker([lat,lng], {radius:7, color:'#d9534f'}).addTo(map);
+        map.setView([lat,lng], 12);
+        showNearestFromPoint(lat, lng);
+      }, function(err){
+        alert('Location unavailable or permission denied');
+        console.warn(err);
+      }, { enableHighAccuracy:true, timeout:8000 });
+    });
+
+    // Reset button
+    document.getElementById('resetBtn').addEventListener('click', function(){
+      map.setView([19.7515,75.7139], 6);
+      if(window._selectedMarker) map.removeLayer(window._selectedMarker);
+      closeSheet();
+    });
+
+    // AUTOCOMPLETE (loads areas from areas_maharashtra.json)
+    const input = document.getElementById('manual');
+    const listEl = document.getElementById('autocompleteList');
+    let areas = []; // array of {area,city,lat,lng}
+    let areasLower = [];
+
+    function closeList(){ listEl.style.display='none'; listEl.innerHTML=''; }
+    function openList(){ listEl.style.display='block'; }
+
+    // Fetch areas JSON
+    fetch('areas_maharashtra.json').then(r=>{
+      if(!r.ok) throw new Error('areas file missing');
+      return r.json();
+    }).then(data=>{
+      // Expect data to be array of objects {area, city, lat, lng}
+      areas = data;
+      areasLower = areas.map(a=>a.area.toLowerCase());
+      console.log('areas loaded', areas.length);
+    }).catch(err=>{
+      console.warn('areas load failed', err);
+      // fallback small list
+      areas = [{area:'Baner',city:'Pune',lat:18.559,lng:73.786},{area:'Balewadi',city:'Pune',lat:18.564,lng:73.776},{area:'Bavdhan',city:'Pune',lat:18.515,lng:73.776}];
+      areasLower = areas.map(a=>a.area.toLowerCase());
+    });
+
+    // Efficient autocomplete: startsWith then includes
+    input.addEventListener('input', function(){
+      const q = this.value.trim().toLowerCase();
+      closeList();
+      if(!q || !areasLower || !areasLower.length) return;
+      const matches = [];
+      // startsWith pass
+      for(let i=0;i<areasLower.length;i++){
+        if(areasLower[i].startsWith(q)){ matches.push(areas[i].area); if(matches.length>=50) break; }
+      }
+      // includes pass
+      if(matches.length<50){
+        for(let i=0;i<areasLower.length;i++){
+          if(areasLower[i].includes(q) && !matches.includes(areas[i].area)){ matches.push(areas[i].area); if(matches.length>=100) break; }
+        }
+      }
+      if(!matches.length) return;
+      listEl.innerHTML = '';
+      openList();
+      matches.forEach(m=>{
+        const it = document.createElement('div');
+        it.className = 'autocomplete-item';
+        it.textContent = m;
+        it.addEventListener('click', function(){
+          input.value = m;
+          closeList();
+          processAreaSelection(m);
+        });
+        listEl.appendChild(it);
+      });
+    });
+
+    document.addEventListener('click', function(e){ if(!e.target.closest('.autocomplete-wrapper')) closeList(); });
+
+    input.addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); const v=this.value.trim(); if(v) processAreaSelection(v); closeList(); }
+    });
+
+    // On area selection: look up area object and find nearest center
+    function processAreaSelection(areaName){
+      const lowered = areaName.toLowerCase();
+      // exact match first
+      let areaObj = areas.find(a => a.area.toLowerCase() === lowered);
+      // if not exact, startsWith
+      if(!areaObj) areaObj = areas.find(a => a.area.toLowerCase().startsWith(lowered));
+      // fallback: includes
+      if(!areaObj) areaObj = areas.find(a => a.area.toLowerCase().includes(lowered));
+      if(!areaObj){
+        alert('No geolocation available for "'+areaName+'". Try another area.');
+        return;
+      }
+      // center map to area coordinates and find nearest center
+      const refLat = areaObj.lat, refLng = areaObj.lng;
+      map.setView([refLat, refLng], 12);
+      // optional: show small marker for area
+      if(window._selectedMarker) map.removeLayer(window._selectedMarker);
+      window._selectedMarker = L.circleMarker([refLat,refLng], {radius:7, color:'#1976d2'}).addTo(map);
+      // find nearest center
+      let nearest=null, minD=Infinity;
+      centers.forEach(c => { const d = haversine(refLat, refLng, c.lat, c.lng); if(d < minD){ minD=d; nearest=c; } });
+      if(nearest){ updateSheet(nearest, minD); openSheet(true); }
+    }
+
+    // initial sheet collapsed
+    closeSheet();
+  })();
+  </script>
 </body>
 </html>
